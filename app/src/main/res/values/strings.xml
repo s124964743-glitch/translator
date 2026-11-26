@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">螢幕翻譯</string>
+    <string name="service_desc">讀取畫面上的文字並在上方顯示翻譯結果。只有點開「螢幕翻譯」圖示後才會啟動，關閉後即停止。</string>
+    <string name="shortcut_settings">設定</string>
+</resources>
