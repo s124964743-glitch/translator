@@ -133,7 +133,8 @@ class OverlayUi(
         resultScroll.addView(resultList)
         root.addView(resultScroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        tvStatus.textSize = 12f
+        tvStatus.textSize = 11f
+        tvStatus.maxLines = 8
         tvStatus.setTextColor(cWarn)
         tvStatus.visibility = View.GONE
         tvStatus.setPadding(0, dp(4), 0, 0)

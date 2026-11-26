@@ -156,6 +156,7 @@ class TranslatorService : AccessibilityService() {
 
     private fun collect(foreign: Lang): List<String> {
         val items = ArrayList<Item>()
+        val seenPkgs = ArrayList<String>()
         val counter = IntArray(1)
         val ws: List<AccessibilityWindowInfo> = try {
             windows
@@ -166,11 +167,15 @@ class TranslatorService : AccessibilityService() {
             if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
             val root = w.root ?: continue
             if (skipPackage(root.packageName?.toString())) continue
+            seenPkgs.add(root.packageName?.toString() ?: "?")
             walk(root, items, counter, 0)
         }
         if (ws.isEmpty()) {
             val root = rootInActiveWindow
-            if (root != null && !skipPackage(root.packageName?.toString())) walk(root, items, counter, 0)
+            if (root != null && !skipPackage(root.packageName?.toString())) {
+                seenPkgs.add("active:" + (root.packageName?.toString() ?: "?"))
+                walk(root, items, counter, 0)
+            }
         }
         items.sortWith(compareBy<Item>({ it.top }, { it.left }))
         val out = ArrayList<String>()
@@ -184,7 +189,8 @@ class TranslatorService : AccessibilityService() {
             if (items.any { o -> o !== item && o.desc && o.text.length > item.text.length && o.text.contains(item.text) }) continue
             if (LangDetect.detect(item.text) == foreign) out.add(item.text)
         }
-        lastStats = "讀到 ${items.size} 段文字，其中 ${out.size} 段是${foreign.label}"
+        val dump = items.take(25).joinToString(" | ") { (if (it.desc) "D:" else "T:") + it.text.replace("\n", " ").take(22) }
+        lastStats = "讀到 ${items.size} 段文字，其中 ${out.size} 段是${foreign.label}\n套用:${seenPkgs.joinToString(",")}\n$dump"
         return if (out.size > 40) out.subList(out.size - 40, out.size).toList() else out
     }
 
