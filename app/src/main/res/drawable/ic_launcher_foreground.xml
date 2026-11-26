@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- back keycap (teal) -->
+    <path
+        android:fillColor="#2BB3A3"
+        android:pathData="M30,40 L62,40 Q68,40 68,46 L68,72 Q68,78 62,78 L30,78 Q24,78 24,72 L24,46 Q24,40 30,40 Z" />
+    <path
+        android:fillColor="#52D6C6"
+        android:pathData="M30,38 L62,38 Q68,38 68,44 L68,66 Q68,72 62,72 L30,72 Q24,72 24,66 L24,44 Q24,38 30,38 Z" />
+    <!-- front keycap (coral) -->
+    <path
+        android:fillColor="#E8604C"
+        android:pathData="M48,50 L80,50 Q86,50 86,56 L86,82 Q86,88 80,88 L48,88 Q42,88 42,82 L42,56 Q42,50 48,50 Z" />
+    <path
+        android:fillColor="#FF8A6B"
+        android:pathData="M48,48 L80,48 Q86,48 86,54 L86,76 Q86,82 80,82 L48,82 Q42,82 42,76 L42,54 Q42,48 48,48 Z" />
+    <!-- legend dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,65 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>
