@@ -20,7 +20,7 @@ class KalaSettings(context: Context) {
         set(v) = sp.edit().putInt("volume", v).apply()
 
     var switchId: String
-        get() = sp.getString("switchId", "red") ?: "red"
+        get() = sp.getString("switchId", "blue") ?: "blue"
         set(v) = sp.edit().putString("switchId", v).apply()
 
     var vibrateOn: Boolean
@@ -40,12 +40,21 @@ class KalaSettings(context: Context) {
         set(v) = sp.edit().putBoolean("ledOn", v).apply()
 
     var numberRow: Boolean
-        get() = sp.getBoolean("numberRow", true)
+        get() = sp.getBoolean("numberRow", false)
         set(v) = sp.edit().putBoolean("numberRow", v).apply()
 
     var themeId: String
         get() = sp.getString("themeId", "sakura") ?: "sakura"
         set(v) = sp.edit().putString("themeId", v).apply()
+
+    /** "zh" (注音) or "en" */
+    var lang: String
+        get() = sp.getString("lang", "zh") ?: "zh"
+        set(v) = sp.edit().putString("lang", v).apply()
+
+    var assocOn: Boolean
+        get() = sp.getBoolean("assocOn", true)
+        set(v) = sp.edit().putBoolean("assocOn", v).apply()
 
     /** keyboard height in percent (80..130) */
     var heightPct: Int

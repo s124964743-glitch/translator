@@ -20,7 +20,21 @@ jobs:
         with:
           gradle-version: 8.7
       - name: Build release APK
-        run: gradle --no-daemon assembleRelease
+        run: |
+          set -o pipefail
+          gradle --no-daemon assembleRelease 2>&1 | tee build.log
+      - name: Publish compile errors to the buildlog branch
+        if: failure()
+        run: |
+          grep -E "^e: |error:|What went wrong|Execution failed" -A4 build.log | head -200 > /tmp/build-errors.txt || true
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan buildlog
+          git rm -rf --quiet . || true
+          cp /tmp/build-errors.txt build-errors.txt
+          git add build-errors.txt
+          git commit -q -m "build errors for ${GITHUB_SHA}"
+          git push -f origin buildlog
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk KalaKeyboard.apk
       - uses: actions/upload-artifact@v4
