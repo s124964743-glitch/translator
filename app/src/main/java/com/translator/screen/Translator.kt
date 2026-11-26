@@ -99,68 +99,13 @@ class ClaudeEngine(private val apiKey: String, private val model: String) : Engi
     }
 }
 
-/** 備援：Microsoft 翻譯（免金鑰，口語度較差） */
-object MsEngine : Engine {
-    @Volatile private var token: String? = null
-    @Volatile private var tokenAt = 0L
-
-    private fun auth(force: Boolean): String {
-        val cur = token
-        if (!force && cur != null && System.currentTimeMillis() - tokenAt < 8 * 60 * 1000) return cur
-        val (c, t) = Http.request("https://edge.microsoft.com/translate/auth", "GET", mapOf("User-Agent" to "Mozilla/5.0"), null)
-        if (c !in 200..299 || t.isBlank()) throw IOException("Microsoft 授權失敗 $c")
-        token = t.trim()
-        tokenAt = System.currentTimeMillis()
-        return t.trim()
-    }
-
-    override fun translate(texts: List<String>, from: Lang, to: Lang): List<String> {
-        val arr = JSONArray()
-        for (t in texts) arr.put(JSONObject().put("Text", t))
-        val url = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=${from.ms}&to=${to.ms}&textType=plain"
-        var attempt = 0
-        while (true) {
-            val (code, resp) = Http.request(
-                url, "POST",
-                mapOf("Authorization" to "Bearer " + auth(attempt > 0), "Content-Type" to "application/json"),
-                arr.toString()
-            )
-            if (code == 401 && attempt == 0) {
-                attempt++
-                continue
-            }
-            if (code !in 200..299) throw IOException("Microsoft HTTP $code")
-            val res = JSONArray(resp)
-            val out = ArrayList<String>()
-            for (i in 0 until res.length()) {
-                out.add(res.getJSONObject(i).getJSONArray("translations").getJSONObject(0).getString("text"))
-            }
-            if (out.size != texts.size) throw IOException("Microsoft 回應數量不符")
-            return out
-        }
-    }
-}
-
 class TranslationManager(private val prefs: Prefs) {
     @Volatile var lastNote: String? = null
 
     fun translate(texts: List<String>, from: Lang, to: Lang): List<String> {
-        if (prefs.engine == "claude") {
-            val key = prefs.apiKey.trim()
-            if (key.isEmpty()) {
-                lastNote = "未設定 Claude API Key，目前使用備援引擎（口語度較差）"
-            } else {
-                try {
-                    val r = ClaudeEngine(key, prefs.model.trim().ifEmpty { Prefs.DEFAULT_MODEL }).translate(texts, from, to)
-                    lastNote = null
-                    return r
-                } catch (e: Exception) {
-                    lastNote = "Claude 失敗（${e.message}），已改用備援引擎"
-                }
-            }
-        } else {
-            lastNote = null
-        }
-        return MsEngine.translate(texts, from, to)
+        val key = prefs.apiKey.trim()
+        if (key.isEmpty()) throw IOException("尚未設定 Claude API Key：長按圖示 → 設定，貼上 Key 後儲存")
+        lastNote = null
+        return ClaudeEngine(key, prefs.model.trim().ifEmpty { Prefs.DEFAULT_MODEL }).translate(texts, from, to)
     }
 }

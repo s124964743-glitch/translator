@@ -9,7 +9,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val s = TranslatorService.instance
-        if (s != null) {
+        if (s != null && Prefs(this).apiKey.isNotBlank()) {
             s.activate()
         } else {
             startActivity(Intent(this, SettingsActivity::class.java))

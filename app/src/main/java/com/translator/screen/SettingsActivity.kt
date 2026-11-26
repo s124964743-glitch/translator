@@ -19,8 +19,6 @@ import android.widget.Toast
 class SettingsActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var tvStatus: TextView
-    private lateinit var rbClaude: RadioButton
-    private lateinit var rbMs: RadioButton
     private lateinit var etKey: EditText
     private lateinit var etModel: EditText
     private lateinit var tvTest: TextView
@@ -75,18 +73,9 @@ class SettingsActivity : Activity() {
             startActivity(i)
         })
 
-        col.addView(text("翻譯引擎", 18f))
-        val rg = RadioGroup(this)
-        rbClaude = RadioButton(this)
-        rbClaude.text = "Claude（精準、口語，需 API Key）"
-        rbMs = RadioButton(this)
-        rbMs.text = "Microsoft 翻譯（免金鑰備援，口語度較差）"
-        rg.addView(rbClaude)
-        rg.addView(rbMs)
-        col.addView(rg)
-        if (prefs.engine == "claude") rbClaude.isChecked = true else rbMs.isChecked = true
 
-        col.addView(text("Claude API Key（sk-ant-…）"))
+        col.addView(text("翻譯引擎：Claude（需要 API Key 才能翻譯）", 18f))
+        col.addView(text("Claude API Key（sk-ant-…，到 console.anthropic.com 申請）"))
         etKey = EditText(this)
         etKey.setText(prefs.apiKey)
         etKey.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -116,7 +105,6 @@ class SettingsActivity : Activity() {
     }
 
     private fun save() {
-        prefs.engine = if (rbClaude.isChecked) "claude" else "ms"
         prefs.apiKey = etKey.text.toString().trim()
         prefs.model = etModel.text.toString().trim().ifEmpty { Prefs.DEFAULT_MODEL }
     }
