@@ -55,9 +55,9 @@ class OverlayUi(
         val tv = TextView(svc)
         tv.text = label
         tv.setTextColor(Color.WHITE)
-        tv.textSize = 15f
+        tv.textSize = 13f
         tv.gravity = Gravity.CENTER
-        tv.setPadding(dp(12), dp(8), dp(12), dp(8))
+        tv.setPadding(dp(10), dp(5), dp(10), dp(5))
         tv.background = roundBg(cChip, 10)
         tv.isClickable = true
         return tv
@@ -79,7 +79,7 @@ class OverlayUi(
         }
     }
 
-    private val resultScroll = ScrollView(svc)
+    private val resultScroll = MaxHeightScrollView(svc, (svc.resources.displayMetrics.heightPixels * 0.17f).toInt())
     private val resultList = LinearLayout(svc)
     private val tvStatus = TextView(svc)
     private val controls = LinearLayout(svc)
@@ -121,7 +121,7 @@ class OverlayUi(
         lp.gravity = Gravity.TOP
 
         root.orientation = LinearLayout.VERTICAL
-        root.setPadding(dp(10), dp(8), dp(10), dp(8))
+        root.setPadding(dp(8), dp(4), dp(8), dp(6))
         val bg = GradientDrawable()
         bg.setColor(cBg)
         val r = dp(16).toFloat()
@@ -131,8 +131,7 @@ class OverlayUi(
         // 翻譯結果區
         resultList.orientation = LinearLayout.VERTICAL
         resultScroll.addView(resultList)
-        val h = (svc.resources.displayMetrics.heightPixels * 0.26f).toInt()
-        root.addView(resultScroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, h))
+        root.addView(resultScroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         tvStatus.textSize = 12f
         tvStatus.setTextColor(cWarn)
@@ -144,13 +143,13 @@ class OverlayUi(
         controls.orientation = LinearLayout.HORIZONTAL
         controls.gravity = Gravity.CENTER_VERTICAL
         val cp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        cp.topMargin = dp(8)
+        cp.topMargin = dp(4)
         root.addView(controls, cp)
 
         val arrow = TextView(svc)
         arrow.text = ">"
         arrow.setTextColor(Color.WHITE)
-        arrow.textSize = 18f
+        arrow.textSize = 15f
         arrow.setPadding(dp(8), 0, dp(8), 0)
 
         controls.addView(btnMine)
@@ -288,15 +287,15 @@ class OverlayUi(
             val tv = TextView(svc)
             tv.text = "等待畫面上的${prefs.foreign.label}…"
             tv.setTextColor(cGray)
-            tv.textSize = 15f
+            tv.textSize = 12f
             resultList.addView(tv)
         } else {
             for (line in lines) {
                 val tv = TextView(svc)
                 tv.text = line ?: "⋯"
                 tv.setTextColor(if (line == null) cGray else Color.WHITE)
-                tv.textSize = 16f
-                tv.setPadding(0, dp(3), 0, dp(3))
+                tv.textSize = 14f
+                tv.setPadding(0, dp(2), 0, dp(2))
                 resultList.addView(tv)
             }
         }
@@ -407,5 +406,12 @@ class OverlayUi(
                 tvResult.text = res ?: ("⚠ " + (err ?: "翻譯失敗"))
             }
         }
+    }
+}
+
+/** 最高不超過 maxH，內容少時只佔需要的高度 */
+class MaxHeightScrollView(ctx: Context, private val maxH: Int) : ScrollView(ctx) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(maxH, View.MeasureSpec.AT_MOST))
     }
 }

@@ -19,7 +19,16 @@ class TranslatorService : AccessibilityService() {
         var instance: TranslatorService? = null
     }
 
-    private class Item(val text: String, val top: Int, val left: Int)
+    private class Item(val text: String, val top: Int, val left: Int, val desc: Boolean)
+
+    private var lastStats = ""
+    private val ticker = object : Runnable {
+        override fun run() {
+            if (!active) return
+            refresh()
+            main.postDelayed(this, 1500)
+        }
+    }
 
     private val main = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -107,7 +116,7 @@ class TranslatorService : AccessibilityService() {
         overlay?.show()
         main.postDelayed({
             performGlobalAction(GLOBAL_ACTION_HOME)
-            main.postDelayed({ scheduleRefresh() }, 800)
+            main.postDelayed(ticker, 800)
         }, 250)
     }
 
@@ -138,9 +147,10 @@ class TranslatorService : AccessibilityService() {
         val mine = prefs.mine
         val foreign = prefs.foreign
         val texts = collect(foreign)
-        val sig = foreign.code + mine.code + "\u0001" + texts.joinToString("\u0000")
+        val sig = foreign.code + mine.code + "\u0001" + texts.joinToString("\u0000") + "\u0002" + lastStats
         if (sig == lastSig) return
         lastSig = sig
+        if (texts.isEmpty()) overlay?.setStatus(lastStats)
         render(texts, mine, foreign)
     }
 
@@ -166,12 +176,15 @@ class TranslatorService : AccessibilityService() {
         val out = ArrayList<String>()
         var prevText = ""
         var prevTop = -1
-        for (it in items) {
-            if (it.text == prevText && it.top == prevTop) continue
-            prevText = it.text
-            prevTop = it.top
-            if (LangDetect.detect(it.text) == foreign) out.add(it.text)
+        for (item in items) {
+            if (item.text == prevText && item.top == prevTop) continue
+            prevText = item.text
+            prevTop = item.top
+            // 被描述文字（contentDescription）完整包含的短文字視為重複
+            if (items.any { o -> o !== item && o.desc && o.text.length > item.text.length && o.text.contains(item.text) }) continue
+            if (LangDetect.detect(item.text) == foreign) out.add(item.text)
         }
+        lastStats = "讀到 ${items.size} 段文字，其中 ${out.size} 段是${foreign.label}"
         return if (out.size > 40) out.subList(out.size - 40, out.size).toList() else out
     }
 
@@ -183,12 +196,20 @@ class TranslatorService : AccessibilityService() {
         counter[0]++
         if (!node.isVisibleToUser) return
         if (!node.isEditable && !node.isPassword) {
-            val raw = node.text?.toString()?.trim()
+            var raw = node.text?.toString()?.trim()
+            var isDesc = false
+            if (raw == null || raw.isEmpty()) {
+                val d = node.contentDescription?.toString()?.trim()
+                if (d != null && d.length >= 2) {
+                    raw = d
+                    isDesc = true
+                }
+            }
             if (raw != null && raw.isNotEmpty()) {
                 val r = Rect()
                 node.getBoundsInScreen(r)
                 if (r.width() > 0 && r.height() > 0) {
-                    out.add(Item(if (raw.length > 1500) raw.substring(0, 1500) else raw, r.top, r.left))
+                    out.add(Item(if (raw.length > 1500) raw.substring(0, 1500) else raw, r.top, r.left, isDesc))
                 }
             }
         }
