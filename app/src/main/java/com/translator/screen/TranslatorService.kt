@@ -187,11 +187,22 @@ class TranslatorService : AccessibilityService() {
             prevTop = item.top
             // 被描述文字（contentDescription）完整包含的短文字視為重複
             if (items.any { o -> o !== item && o.desc && o.text.length > item.text.length && o.text.contains(item.text) }) continue
-            if (LangDetect.detect(item.text) == foreign) out.add(item.text)
+            val kept = extract(item.text, foreign)
+            if (kept != null) out.add(kept)
         }
-        val dump = items.take(25).joinToString(" | ") { (if (it.desc) "D:" else "T:") + it.text.replace("\n", " ").take(22) }
-        lastStats = "讀到 ${items.size} 段文字，其中 ${out.size} 段是${foreign.label}\n套用:${seenPkgs.joinToString(",")}\n$dump"
+        lastStats = "讀到 ${items.size} 段文字，其中 ${out.size} 段是${foreign.label}"
         return if (out.size > 40) out.subList(out.size - 40, out.size).toList() else out
+    }
+
+    /**
+     * 有些 App（如 Messenger）會把「寄件者, 訊息，點按兩下可查看…」合成一段文字。
+     * 依逗號等分隔符拆開，只留下屬於要辨識語言的部分。
+     */
+    private fun extract(text: String, foreign: Lang): String? {
+        val parts = text.split(Regex("[,，;；|｜\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }
+        val keep = parts.filter { LangDetect.detect(it) == foreign }
+        if (keep.isEmpty()) return null
+        return keep.joinToString(if (foreign == Lang.ZH || foreign == Lang.JA) "，" else ", ")
     }
 
     private fun skipPackage(pkg: String?): Boolean =
