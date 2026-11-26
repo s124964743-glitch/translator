@@ -461,6 +461,7 @@ class MainActivity : Activity() {
         toggle(c, "顯示數字列", { settings.numberRow }, { settings.numberRow = it })
         slider(c, "音量", 0, 100, { settings.volume }, "%") { settings.volume = it }
         slider(c, "震動強度", 3, 40, { settings.vibrateMs }, " ms") { settings.vibrateMs = it }
+        slider(c, "按鍵間距", 2, 12, { settings.keyGap }, " dp") { settings.keyGap = it }
         slider(c, "鍵盤高度", 80, 130, { settings.heightPct }, "%") { settings.heightPct = it }
         root.addView(c)
     }

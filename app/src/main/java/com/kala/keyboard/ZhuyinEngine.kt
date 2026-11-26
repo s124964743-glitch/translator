@@ -3,6 +3,9 @@ package com.kala.keyboard
 import android.content.Context
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import kotlin.math.ln
+import kotlin.math.max
+import kotlin.math.min
 
 /** One dictionary entry: text, toneless syllables, tone codes ('1'..'5', one per syllable) and frequency. */
 class DictEntry(val text: String, val sy: Array<String>, val tones: String, val freq: Int)
@@ -12,8 +15,44 @@ class Cand(val text: String, val used: Int)
 class ZhuyinDict private constructor(
     private val byFirst: HashMap<String, ArrayList<DictEntry>>,
     private val firstKeys: List<String>,
-    private val byFirstChar: HashMap<Char, ArrayList<DictEntry>>
+    private val byFirstChar: HashMap<Char, ArrayList<DictEntry>>,
+    val logTotal: Double
 ) {
+    private fun matches(e: DictEntry, bodies: List<String>, tones: CharArray, start: Int, len: Int, prefixLast: Boolean): Boolean {
+        if (e.sy.size != len) return false
+        for (i in 0 until len) {
+            val body = e.sy[i]
+            val typed = bodies[start + i]
+            if (i == len - 1 && prefixLast) {
+                if (!body.startsWith(typed)) return false
+            } else if (body != typed) return false
+            val t = tones[start + i]
+            if (t != ' ' && t != e.tones[i]) return false
+        }
+        return true
+    }
+
+    /** Most frequent word for syllables [start, start+len); lists are sorted by frequency so the first hit wins. */
+    fun bestWord(bodies: List<String>, tones: CharArray, start: Int, len: Int, prefixLast: Boolean): DictEntry? {
+        if (len == 1 && prefixLast) {
+            var best: DictEntry? = null
+            for (key in firstKeys) {
+                if (!key.startsWith(bodies[start])) continue
+                val list = byFirst[key] ?: continue
+                for (e in list) {
+                    if (matches(e, bodies, tones, start, len, true)) {
+                        if (best == null || e.freq > best.freq) best = e
+                        break
+                    }
+                }
+            }
+            return best
+        }
+        val list = byFirst[bodies[start]] ?: return null
+        for (e in list) if (matches(e, bodies, tones, start, len, prefixLast)) return e
+        return null
+    }
+
     /**
      * Collects entries matching the first [k] syllables. [tones] holds ' ' for "not typed".
      * If [prefixLast] the last typed syllable only has to be a prefix of the entry's syllable.
@@ -75,6 +114,7 @@ class ZhuyinDict private constructor(
             val byFirst = HashMap<String, ArrayList<DictEntry>>(4096)
             val byChar = HashMap<Char, ArrayList<DictEntry>>(8192)
             val pool = HashMap<String, String>(8192)
+            var totalChars = 0.0
             ctx.assets.open("zhuyin.txt").use { ins ->
                 BufferedReader(InputStreamReader(ins, "UTF-8"), 1 shl 16).use { br ->
                     while (true) {
@@ -98,12 +138,13 @@ class ZhuyinDict private constructor(
                             sy[i] = pool.getOrPut(body) { body }
                         }
                         val e = DictEntry(text, sy, tn.toString(), freq)
+                        if (text.length == 1) totalChars += freq
                         byFirst.getOrPut(sy[0]) { ArrayList() }.add(e)
                         if (text.length >= 2 && freq > 0) byChar.getOrPut(text[0]) { ArrayList() }.add(e)
                     }
                 }
             }
-            return ZhuyinDict(byFirst, byFirst.keys.toList(), byChar)
+            return ZhuyinDict(byFirst, byFirst.keys.toList(), byChar, ln(max(totalChars, 1.0)))
         }
     }
 }
@@ -212,6 +253,51 @@ class ZhuyinComposer {
         return sb.toString()
     }
 
+    /** Best whole-sentence reading for every prefix length (index j = first j syllables). */
+    private fun sentences(dict: ZhuyinDict, bodies: List<String>, tones: CharArray): Array<String?> {
+        val n = bodies.size
+        val dp = DoubleArray(n + 1) { -1e18 }
+        val back = IntArray(n + 1)
+        val word = arrayOfNulls<String>(n + 1)
+        dp[0] = 0.0
+        val maxL = 6
+        for (i in 0 until n) {
+            if (dp[i] < -1e17) continue
+            for (len in 1..min(maxL, n - i)) {
+                val prefix = (i + len == n && tones[n - 1] == ' ')
+                val e = dict.bestWord(bodies, tones, i, len, prefix)
+                val text: String
+                val sc: Double
+                if (e == null) {
+                    if (len > 1) continue
+                    text = bodies[i] + markOf(tones[i])
+                    sc = -30.0
+                } else {
+                    text = e.text
+                    sc = ln(e.freq + 1.0) - dict.logTotal
+                }
+                if (dp[i] + sc > dp[i + len]) {
+                    dp[i + len] = dp[i] + sc
+                    back[i + len] = i
+                    word[i + len] = text
+                }
+            }
+        }
+        val out = arrayOfNulls<String>(n + 1)
+        for (j in 1..n) {
+            if (dp[j] < -1e17) continue
+            val sb = ArrayList<String>()
+            var k = j
+            while (k > 0) {
+                sb.add(word[k] ?: "")
+                k = back[k]
+            }
+            sb.reverse()
+            out[j] = sb.joinToString("")
+        }
+        return out
+    }
+
     fun candidates(dict: ZhuyinDict?): List<Cand> {
         val out = ArrayList<Cand>()
         val n = sylls.size
@@ -220,13 +306,19 @@ class ZhuyinComposer {
             val bodies = sylls.map { it.body }
             val tones = CharArray(n) { sylls[it].tone }
             val seen = HashSet<String>()
-            val maxK = minOf(n, 8)
-            for (k in maxK downTo 1) {
-                val entries = ArrayList<DictEntry>()
-                val prefix = (k == n && sylls[n - 1].tone == ' ')
-                dict.lookup(bodies, tones, k, prefix, if (k == n) 60 else 16, entries)
-                for (e in entries) if (seen.add(e.text)) out.add(Cand(e.text, k))
-                if (out.size >= 100) break
+            val sent = if (n >= 2) sentences(dict, bodies, tones) else arrayOfNulls<String>(n + 1)
+            for (k in n downTo 1) {
+                if (k >= 2) {
+                    val st = sent[k]
+                    if (st != null && seen.add(st)) out.add(Cand(st, k))
+                }
+                if (k <= 8) {
+                    val entries = ArrayList<DictEntry>()
+                    val prefix = (k == n && sylls[n - 1].tone == ' ')
+                    dict.lookup(bodies, tones, k, prefix, if (k == n) 60 else 16, entries)
+                    for (e in entries) if (seen.add(e.text)) out.add(Cand(e.text, k))
+                }
+                if (out.size >= 120) break
             }
         }
         out.add(Cand(display(), n))

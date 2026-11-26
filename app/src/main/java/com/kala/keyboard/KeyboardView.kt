@@ -59,7 +59,7 @@ class KeyboardView(
 
     private enum class Page { LETTERS, SYM1, SYM2 }
     private enum class ShiftState { OFF, ONCE, LOCK }
-    private enum class BarMode { CAND, TOOLS, THEMES, SWITCHES }
+    private enum class BarMode { CAND, TOOLS, THEMES, SWITCHES, CLIP }
 
     private class KeyRect(val def: KeyDef, val l: Float, val t: Float, val r: Float, val b: Float)
 
@@ -128,8 +128,8 @@ class KeyboardView(
     }
     private val ledThin = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = dp(1.5f)
-        alpha = 230
+        strokeWidth = dp(1.2f)
+        alpha = 220
     }
     private val rectTop = RectF()
     private val rectSide = RectF()
@@ -397,6 +397,99 @@ class KeyboardView(
         ledAnimator = null
     }
 
+    // ------------------------------------------------------------------ clipboard panel
+
+    private var clipScroll = 0f
+    private var clipCards = ArrayList<Pair<RectF, ClipItem>>()
+    private var clipDownY = 0f
+    private var clipDownX = 0f
+    private var clipScroll0 = 0f
+    private var clipMoved = false
+    private var clipPointer = -1
+    private val clipPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG)
+
+    private fun openClip() {
+        ClipStore.init(context)
+        clipScroll = 0f
+        setBar(BarMode.CLIP)
+    }
+
+    fun resetBar() {
+        if (barMode == BarMode.CLIP || barMode == BarMode.THEMES || barMode == BarMode.SWITCHES) {
+            barMode = if (candTexts.isNotEmpty()) BarMode.CAND else BarMode.TOOLS
+            rebuildBar()
+        }
+    }
+
+    private fun clipGeometry(): Float {
+        val items = ClipStore.all()
+        clipCards.clear()
+        val gap = dp(8f)
+        val cw = (width - gap * 3) / 2f
+        val chh = dp(64f)
+        val top0 = barH + gap
+        for ((i, item) in items.withIndex()) {
+            val col = i % 2
+            val row = i / 2
+            val l = gap + col * (cw + gap)
+            val t = top0 + row * (chh + gap) - clipScroll
+            clipCards.add(Pair(RectF(l, t, l + cw, t + chh), item))
+        }
+        val rows = (items.size + 1) / 2
+        return rows * (chh + gap) + gap
+    }
+
+    private fun drawClip(c: Canvas, th: KeyTheme) {
+        val content = clipGeometry()
+        val viewH = height - barH
+        val maxScroll = max(0f, content - viewH)
+        if (clipScroll > maxScroll) { clipScroll = maxScroll; clipGeometry() }
+        val textColor = if (th.id == "custom") Color.WHITE else th.keyText
+        c.save()
+        c.clipRect(0f, barH, width.toFloat(), height.toFloat())
+        if (clipCards.isEmpty()) {
+            drawText(c, "尚無剪貼內容\n複製文字後會自動出現在這裡".replace("\n", " · "), width / 2f, barH + viewH / 2f, dp(15f), blend(textColor, Color.TRANSPARENT, 0.7f))
+        }
+        clipPaint.textSize = dp(14f)
+        clipPaint.color = textColor
+        for ((rc, item) in clipCards) {
+            if (rc.bottom < barH || rc.top > height) continue
+            fill.color = if (item.pinned) blend(th.keyTop, th.accent, 0.3f) else th.keyTop
+            c.drawRoundRect(rc, dp(10f), dp(10f), fill)
+            val tw = (rc.width() - dp(44f)).toInt()
+            val sl = android.text.StaticLayout.Builder
+                .obtain(item.text.replace('\n', ' '), 0, item.text.length.coerceAtMost(200), clipPaint, tw)
+                .setMaxLines(2)
+                .setEllipsize(android.text.TextUtils.TruncateAt.END)
+                .build()
+            c.save()
+            c.translate(rc.left + dp(10f), rc.top + dp(8f))
+            sl.draw(c)
+            c.restore()
+            drawText(c, if (item.pinned) "📌" else "📍", rc.right - dp(18f), rc.top + dp(18f), dp(14f), textColor)
+            drawText(c, "✕", rc.right - dp(18f), rc.bottom - dp(16f), dp(14f), blend(textColor, Color.TRANSPARENT, 0.6f))
+        }
+        c.restore()
+    }
+
+    private fun clipTap(x: Float, y: Float) {
+        for ((rc, item) in clipCards) {
+            if (!rc.contains(x, y)) continue
+            vibrate()
+            if (x > rc.right - dp(36f) && y < rc.top + dp(32f)) {
+                ClipStore.togglePin(item)
+            } else if (x > rc.right - dp(36f) && y > rc.bottom - dp(32f)) {
+                ClipStore.remove(item)
+            } else {
+                listener?.onText(item.text)
+                setBar(if (candTexts.isNotEmpty()) BarMode.CAND else BarMode.TOOLS)
+                return
+            }
+            invalidate()
+            return
+        }
+    }
+
     // ------------------------------------------------------------------ bar model
 
     private fun leftButtonLabel(): String? = when (barMode) {
@@ -413,7 +506,15 @@ class KeyboardView(
             BarMode.CAND -> candTexts.forEachIndexed { i, s ->
                 items.add(BarItem(s, null, false) { listener?.onCandidate(i) })
             }
+            BarMode.CLIP -> {
+                items.add(BarItem("🗑 清除未釘選", null, false) {
+                    ClipStore.clearUnpinned()
+                    clipScroll = 0f
+                    invalidate()
+                })
+            }
             BarMode.TOOLS -> {
+                items.add(BarItem("📋 剪貼簿", null, false) { openClip() })
                 items.add(BarItem("🎨 主題", null, false) { setBar(BarMode.THEMES) })
                 items.add(BarItem("⌨ 軸體", null, false) { setBar(BarMode.SWITCHES) })
                 items.add(BarItem(if (settings.soundOn) "🔊 音效開" else "🔇 音效關", null, false) {
@@ -499,6 +600,11 @@ class KeyboardView(
         ledShader?.let {
             ledMatrix.setTranslate(ledPhase * width, 0f)
             it.setLocalMatrix(ledMatrix)
+        }
+        if (barMode == BarMode.CLIP) {
+            drawClip(canvas, th)
+            drawBar(canvas, th)
+            return
         }
         drawBar(canvas, th)
         for (k in keyRects) {
@@ -586,8 +692,8 @@ class KeyboardView(
     }
 
     private fun drawKey(c: Canvas, k: KeyRect, th: KeyTheme) {
-        val insetX = dp(2.4f)
-        val insetY = dp(3.6f)
+        val insetX = dp(settings.keyGap * 0.5f)
+        val insetY = dp(settings.keyGap * 0.6f)
         val l = k.l + insetX
         val r = k.r - insetX
         val t = k.t + insetY
@@ -616,7 +722,6 @@ class KeyboardView(
 
         if (settings.ledOn && ledShader != null) {
             rectLed.set(l - dp(0.5f), t - dp(0.5f), r + dp(0.5f), b + dp(0.5f))
-            c.drawRoundRect(rectLed, rad + dp(1f), rad + dp(1f), ledWide)
             c.drawRoundRect(rectLed, rad + dp(1f), rad + dp(1f), ledThin)
         }
 
@@ -735,6 +840,14 @@ class KeyboardView(
                         barScroll0 = barScroll
                         barMoved = false
                     }
+                } else if (barMode == BarMode.CLIP) {
+                    if (clipPointer == -1) {
+                        clipPointer = id
+                        clipDownX = x
+                        clipDownY = y
+                        clipScroll0 = clipScroll
+                        clipMoved = false
+                    }
                 } else {
                     pressPointer(id, x, y)
                 }
@@ -750,6 +863,13 @@ class KeyboardView(
                             clampScroll()
                             invalidate()
                         }
+                    } else if (id == clipPointer) {
+                        val dy = e.getY(i) - clipDownY
+                        if (abs(dy) > touchSlop) clipMoved = true
+                        if (clipMoved) {
+                            clipScroll = max(0f, clipScroll0 - dy)
+                            invalidate()
+                        }
                     } else {
                         movePointer(id, e.getX(i), e.getY(i))
                     }
@@ -761,12 +881,16 @@ class KeyboardView(
                 if (id == barPointer) {
                     if (!barMoved) barTap(e.getX(i))
                     barPointer = -1
+                } else if (id == clipPointer) {
+                    if (!clipMoved) clipTap(e.getX(i), e.getY(i))
+                    clipPointer = -1
                 } else {
                     releasePointer(id, true)
                 }
             }
             MotionEvent.ACTION_CANCEL -> {
                 barPointer = -1
+                clipPointer = -1
                 cancelAllTouches()
             }
         }

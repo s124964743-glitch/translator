@@ -59,9 +59,28 @@ class KalaIME : InputMethodService() {
         sound = SoundEngine(this)
         sound.load(settings.switchId)
         ZhuyinDictHolder.ensure(this)
+        ClipStore.init(this)
+        try {
+            clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard?.addPrimaryClipChangedListener(clipListener)
+        } catch (e: Exception) {
+        }
+    }
+
+    private var clipboard: android.content.ClipboardManager? = null
+    private val clipListener = android.content.ClipboardManager.OnPrimaryClipChangedListener {
+        try {
+            val clip = clipboard?.primaryClip ?: return@OnPrimaryClipChangedListener
+            val sensitive = clip.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) ?: false
+            if (sensitive || clip.itemCount == 0) return@OnPrimaryClipChangedListener
+            val txt = clip.getItemAt(0).coerceToText(this)?.toString() ?: return@OnPrimaryClipChangedListener
+            ClipStore.add(txt)
+        } catch (e: Exception) {
+        }
     }
 
     override fun onDestroy() {
+        try { clipboard?.removePrimaryClipChangedListener(clipListener) } catch (e: Exception) {}
         sound.release()
         super.onDestroy()
     }

@@ -56,6 +56,11 @@ class KalaSettings(context: Context) {
         get() = sp.getBoolean("assocOn", true)
         set(v) = sp.edit().putBoolean("assocOn", v).apply()
 
+    /** gap between keys in dp (2..12) */
+    var keyGap: Int
+        get() = sp.getInt("keyGap", 7)
+        set(v) = sp.edit().putInt("keyGap", v).apply()
+
     /** keyboard height in percent (80..130) */
     var heightPct: Int
         get() = sp.getInt("heightPct", 100)

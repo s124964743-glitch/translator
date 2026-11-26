@@ -30,6 +30,7 @@ class InputController(
         assocMode = false
         view.clearCandidates()
         view.setChinese(isChinese())
+        view.resetBar()
     }
 
     fun refreshCaps() {
